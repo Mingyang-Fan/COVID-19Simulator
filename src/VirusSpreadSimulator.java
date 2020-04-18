@@ -1,7 +1,9 @@
+package virusSpreadSimulator3;
 
 import java.awt.Canvas;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -10,40 +12,43 @@ import java.awt.event.KeyEvent;
 import java.awt.image.BufferStrategy;
 import javax.swing.JFrame;
 
-/**
- * @author Zayed
- *
- */
-public class VirusSpreadSimulator extends Canvas implements Runnable {
 
-	private static final long serialVersionUID = 1L;
+public class VirusSpreadSimulator extends Canvas implements Runnable{
 
-	public final static int WIDTH = 1000; // width of canvas
-	public final static int HEIGHT = WIDTH * 9 / 16; // 16:9 aspect ratio canvas
+	private static final long serialVersionUID = -4584388369897487885L;
+
+	public static final int WIDTH = 1000, HEIGHT = WIDTH / 16 * 9;
 
 	public boolean running = false; // true if the game is running
 	private Thread gameThread; // thread where the game is updated AND drawn (single thread game)
 	private Hospital hospital;
 
-	// game objects
+	Location city;
+	private Menu menu;
 
-	Location city; // the city in which we monitor the population and spread of the virus
+	public enum STATE{
+		Menu,
+		Help,
+		Run,
+		Set,
+		End
+	}
 
-	/**
-	 * Constructor
-	 */
+	public static STATE runState = STATE.Menu;
+
+
 	public VirusSpreadSimulator() {
+		// hospital = new Hospital();
 
+		
 		canvasSetup();
 		initialize();
+		
 
 		newWindow();
 
 	}
-
-	/**
-	 * Setup JFrame where the canvas will be in
-	 */
+	
 	private void newWindow() {
 		JFrame frame = new JFrame("Virus Spread Simulator");
 
@@ -62,8 +67,13 @@ public class VirusSpreadSimulator extends Canvas implements Runnable {
 	 */
 	private void initialize() {
 		// Initialize
+		this.removeMouseListener(menu);
 		city = new Location(getWidth(), getHeight(), new Hospital());
+		menu = new Menu(this, city, new Hospital());
+		this.addMouseListener(menu);
 	}
+	
+	
 
 	/**
 	 * just to setup the canvas to our desired settings and sizes, setup events
@@ -81,6 +91,9 @@ public class VirusSpreadSimulator extends Canvas implements Runnable {
 
 				if (code == KeyEvent.VK_R)
 					initialize();
+				
+				if (code == KeyEvent.VK_M)
+					runState = STATE.Set;
 
 			}
 
@@ -95,53 +108,10 @@ public class VirusSpreadSimulator extends Canvas implements Runnable {
 
 		this.setFocusable(true);
 	}
+	
 
-	/**
-	 * Game loop
-	 */
-	@Override
 	public void run() {
-		// I have a full video explaining this game loop on my YouTube channel Coding Heaven
-
 		this.requestFocus();
-		// game timer
-
-		/*final double MAX_FRAMES_PER_SECOND = 60.0;
-		final double MAX_UPDATES_PER_SECOND = 60.0;
-
-		long startTime = System.nanoTime();
-		final double uOptimalTime = 1000000000 / MAX_UPDATES_PER_SECOND;
-		final double fOptimalTime = 1000000000 / MAX_FRAMES_PER_SECOND;
-		double uDeltaTime = 0, fDeltaTime = 0;
-		int frames = 0, updates = 0;
-		long timer = System.currentTimeMillis();
-
-		while (running) {
-
-			long currentTime = System.nanoTime();
-			uDeltaTime += (currentTime - startTime) / uOptimalTime;
-			fDeltaTime += (currentTime - startTime) / fOptimalTime;
-			startTime = currentTime;
-
-			while (uDeltaTime >= 1) {
-				update();
-				updates++;
-				uDeltaTime--;
-			}
-
-			while (fDeltaTime >= 1) {
-				render();
-				frames++;
-				fDeltaTime--;
-			}
-
-			if (System.currentTimeMillis() - timer >= 1000) {
-				System.out.println("UPS: " + updates + ", FPS: " + frames);
-				frames = 0;
-				updates = 0;
-				timer += 1000;
-			}
-		}*/
 		long lastTime = System.nanoTime();
 		double amountOfTicks = 60.0;
 		double ns = 1000000000 / amountOfTicks;
@@ -167,13 +137,22 @@ public class VirusSpreadSimulator extends Canvas implements Runnable {
 			}
 		}
 		stop();
-
-		stop(); // stop the thread and the game
 	}
+	
+	
 
-	/**
-	 * start the thread and the game
-	 */
+	private void update() {
+
+		if(runState == STATE.Run) {
+				city.update();
+		}
+		else if(runState == STATE.Menu || runState == STATE.End || runState == STATE.Help || runState == STATE.Set) {
+			menu.tick();
+		}
+
+	}
+	
+	
 	public synchronized void start() {
 		gameThread = new Thread(this);
 		/*
@@ -184,7 +163,7 @@ public class VirusSpreadSimulator extends Canvas implements Runnable {
 		gameThread.start(); // start thread
 		running = true;
 	}
-
+	
 	/**
 	 * Stop the thread and the game
 	 */
@@ -197,73 +176,40 @@ public class VirusSpreadSimulator extends Canvas implements Runnable {
 		}
 	}
 
-	/**
-	 * draw the background and all the objects
-	 */
-	public void render() {
-		// Initialize drawing tools first before drawing
-
-		BufferStrategy buffer = this.getBufferStrategy(); // extract buffer so we can use them
-		// a buffer is basically like a blank canvas we can draw on
-
-		if (buffer == null) { // if it does not exist, we can't draw! So create it please
-			this.createBufferStrategy(3); // Creating a Triple Buffer
-			/*
-			 * triple buffering basically means we have 3 different canvases. this is used to
-			 * improve performance but the drawbacks are the more buffers, the more memory
-			 * needed so if you get like a memory error or something, put 2 instead of 3.
-			 *
-			 * BufferStrategy:
-			 * https://docs.oracle.com/javase/7/docs/api/java/awt/image/BufferStrategy.html
-			 */
-
+	private void render() {
+		BufferStrategy bs = this.getBufferStrategy();
+		if(bs == null) {
+			this.createBufferStrategy(3);
 			return;
 		}
 
-		Graphics g = buffer.getDrawGraphics(); // extract drawing tool from the buffers
-		/*
-		 * Graphics is class used to draw rectangles, ovals and all sorts of shapes and
-		 * pictures so it's a tool used to draw on a buffer
-		 *
-		 * Graphics: https://docs.oracle.com/javase/7/docs/api/java/awt/Graphics.html
-		 */
 
-		// draw background
-		drawBackground(g);
+		Graphics g = bs.getDrawGraphics();
+		
+		if(runState == STATE.Run) {
+			drawBackground(g);
+			city.setWalls(getWidth(), getHeight());
+			city.draw(g);
+		}
+		else if(runState == STATE.Menu || runState == STATE.End || runState == STATE.Help || runState == STATE.Set) {
+			drawBackground(g);
+			menu.render(g);
+		}
 
-		// DRAW OBJECTS //
-		city.draw(g);
 
-		// actually draw
-		g.dispose(); // Disposes of this graphics context and releases any system resources that it
-						// is using
-		buffer.show(); // actually shows us the 3 beautiful rectangles we drew...LOL
-
+		g.dispose();
+		bs.show();
 	}
-
+	
 	private void drawBackground(Graphics g) {
 		// black background
 		g.setColor(Color.black);
 		g.fillRect(0, 0, getWidth(), getHeight());
 	}
 
-	/**
-	 * update settings and move all objects
-	 */
-	public void update() {
-
-		city.update();
-
-	}
-
-	/**
-	 *
-	 * Main function, creates the canvas
-	 *
-	 * @param args
-	 */
-	public static void main(String[] args) {
+	public static void main(String args[]) {
 		new VirusSpreadSimulator();
 	}
+
 
 }
